@@ -1,0 +1,26 @@
+' インデックス プログラム
+
+#strict
+
+'Win32APIの定義ファイル
+#include <api_commctrl.sbp>
+
+'RADツールが生成するウィンドウ制御プログラム
+#include "Callback.wbp"
+
+'プロジェクト内のプログラム ファイル
+#include "MainWnd.sbp"
+#include "SystemUtil.abp"
+#include "Messages.abp"
+#include "TaskManagerData.abp"
+#include "ListViewUtil.abp"
+#include "FormUtil.abp"
+#include "TaskEdit.sbp"
+#include "IniUtil.abp"
+
+'RADツールが生成するウィンドウ生成プログラム
+#include "MakeWindow.wbp"
+
+'リソースファイル
+#include "resource.sbp"
+#resource "TaskManagerAB.rc"

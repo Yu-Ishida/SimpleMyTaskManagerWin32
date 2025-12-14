@@ -1,0 +1,175 @@
+/**
+	ini ファイルユーティリティ
+*/
+
+Declare Function WritePrivateProfileString Lib "kernel32" Alias "WritePrivateProfileStringA" (lpAppName As BytePtr, lpKeyName As BytePtr, lpString As BytePtr, lpFileName As BytePtr) As BOOL
+Declare Function GetPrivateProfileString Lib "kernel32" Alias "GetPrivateProfileStringA" (lpAppName As BytePtr, lpKeyName As BytePtr, lpDefault As BytePtr, lpReturnedString As BytePtr, nSize As DWord, lpFileName As BytePtr) As DWord
+
+' .ini ファイルとして保存されるタスク情報のファイル名
+Const INI_FILE_NAME = Ex".\\TaskData.ini"
+
+/**
+	保存された .ini ファイルからタスクの全件数を取得します。
+	Return: .ini ファイルから取得したタスクの全件数
+*/
+Function GetTotalTaskDataCount() As Long
+	Dim res = 0 As Long
+
+	If (GetExistFile(INI_FILE_NAME) = FALSE) Then
+		' .ini ファイルが無いので以後の処理を行わない。
+		GetTotalTaskDataCount = 0
+		Exit Function
+	End If
+
+	Dim tempStr = NULL As BytePtr
+	tempStr = calloc(MAX_TEXT_LENGTH + 1)
+
+	' .ini ファイルから取得
+	GetPrivateProfileString("General", "TotalRecordCount", NULL, tempStr, MAX_TEXT_LENGTH, INI_FILE_NAME)
+
+	res = Val(tempStr) As Long ' 数値に変換
+	free(tempStr)
+
+	GetTotalTaskDataCount = res
+End Function
+
+/**
+	保存された .ini ファイルのタスク情報を取得します。
+	recordSection: 取得するレコードのセクション番号
+	Return: .ini ファイルから取得したタスク情報, 取得出来ない場合は NULL
+*/
+Function GetTaskDataFromINIFile(recordSection As Long) As *TaskManagerData
+	Dim res As *TaskManagerData
+
+	' タスク .ini ファイルの存在確認
+	If (GetExistFile(INI_FILE_NAME) = FALSE) Then
+		' ファイルが無いので以後の処理を行わない。
+		GetTaskDataFromINIFile = NULL
+		Exit Function
+	End If
+
+	Dim isTaskComplete = FALSE As BOOL
+	Dim taskName = NULL As BytePtr
+	Dim taskProgress = 0 As Long
+	Dim taskDeadLine = NULL As BytePtr
+	Dim taskRemarks = NULL As BytePtr
+
+	Dim tempStr = NULL As BytePtr
+	tempStr = calloc(MAX_TEXT_LENGTH + 1)
+
+	' .ini ファイルからタスクデータを取得
+	GetPrivateProfileString("TaskName" + Str$(recordSection), "IsTaskComplete", "0", tempStr, MAX_TEXT_LENGTH, INI_FILE_NAME)
+	isTaskComplete = Val(tempStr) As BOOL
+	FillMemory(tempStr, Len(tempStr), 0)
+
+	GetPrivateProfileString("TaskName" + Str$(recordSection), "TaskName", "", tempStr, MAX_TEXT_LENGTH, INI_FILE_NAME)
+	taskName = calloc(MAX_TEXT_LENGTH + 1)
+	lstrcpy(taskName, tempStr)
+	FillMemory(tempStr, Len(tempStr), 0)
+
+	GetPrivateProfileString("TaskName" + Str$(recordSection), "TaskProgress", "0", tempStr, MAX_TEXT_LENGTH, INI_FILE_NAME)
+	taskProgress = Val(tempStr) As Long
+	FillMemory(tempStr, Len(tempStr), 0)
+
+	GetPrivateProfileString("TaskName" + Str$(recordSection), "TaskDeadLine", "", tempStr, MAX_TEXT_LENGTH, INI_FILE_NAME)
+	taskDeadLine = calloc(MAX_TEXT_LENGTH + 1)
+	lstrcpy(taskDeadLine, tempStr)
+	FillMemory(tempStr, Len(tempStr), 0)
+
+	' ★★★ TODO: 独自の改行文字がある場合、\r\n に置き換える処理を実装する。
+	GetPrivateProfileString("TaskName" + Str$(recordSection), "TaskRemarks", "", tempStr, MAX_TEXT_LENGTH, INI_FILE_NAME)
+	' for 検証処理
+	' Base64 文字列を平文に変換してデータを格納する。
+	Dim encodedStr = NULL As BytePtr
+	DecryptString(tempStr, encodedStr)
+	' for debug
+	ConsoleOutputLine("Decrypt: " + encodedStr)
+	' for 検証処理 END
+
+
+	taskRemarks = calloc(MAX_TEXT_LENGTH + 1)
+	'lstrcpy(taskRemarks, tempStr)
+	lstrcpy(taskRemarks, encodedStr)
+
+	' ★★★ TODO: 検証処理
+	/*
+	Debug
+	ConsoleOutputLine(tempStr)
+	*/
+	' ★★★ 検証処理 END
+
+	' オブジェクトを作成
+	Dim taskDeadLineStruct As SYSTEMTIME
+	GetDateStrToSystemTimeStruct(taskDeadLine, VarPtr(taskDeadLineStruct))
+	res = New TaskManagerData(isTaskComplete, taskName, taskProgress, VarPtr(taskDeadLineStruct), taskRemarks)
+
+	free(tempStr)
+	free(taskName)
+	free(taskDeadLine)
+	free(taskRemarks)
+
+	' 追加
+	free(encodedStr)
+
+	GetTaskDataFromINIFile = res
+End Function
+
+' ★★★ 追加修正処理 (バグ修正対応)
+/**
+	存在するタスクリストの .ini ファイルを削除します。
+	Return: 削除に成功した場合: TRUE, 失敗した場合: FALSE
+*/
+Function DeleteTaskListIniFile() As BOOL
+	Dim res = FALSE As BOOL
+
+	' タスクリストのファイルを削除する。
+	res = DeleteFile(INI_FILE_NAME)
+
+	DeleteTaskListIniFile = res
+End Function
+' ★★★ 追加修正処理 END
+
+/**
+	保存するタスクの全件数を .ini ファイルに保存します。
+	totalTaskDataCount: 保存するタスクの全件数
+	Return: 正常に保存出来た場合: TRUE, そうでない場合: FALSE
+*/
+Function SaveTotalTaskDataCount(totalTaskDataCount As Long) As BOOL
+	Dim res = FALSE As BOOL
+
+	WritePrivateProfileString("General", "TotalRecordCount", Str$(totalTaskDataCount), INI_FILE_NAME)
+
+	res = TRUE
+	SaveTotalTaskDataCount = res
+End Function
+
+/**
+	タスク情報を .ini ファイルとして出力します。
+	sectionNumber: 保存する項目のセクション番号
+	tData: 保存するタスク情報が格納されたオブジェクト
+	Return: 正常に保存できた場合: TRUE, そうでない場合: FALSE
+*/
+Function SaveTaskData(sectionNumber As Long, tData As *TaskManagerData) As BOOL
+	Dim res = FALSE As BOOL
+
+	' 参考資料
+	' INIファイル(Win32API)(C言語) - 超初心者向けプログラミング入門
+	' URL: https://programming.pc-note.net/winapi/inifile.html
+
+	WritePrivateProfileString("TaskName" + Str$(sectionNumber + 1), "IsTaskComplete", Str$(tData->GetIsTaskComplete()), INI_FILE_NAME)
+	WritePrivateProfileString("TaskName" + Str$(sectionNumber + 1), "TaskName", tData->GetTaskName(), INI_FILE_NAME)
+	WritePrivateProfileString("TaskName" + Str$(sectionNumber + 1), "TaskProgress", Str$(tData->GetTaskProgress()), INI_FILE_NAME)
+	WritePrivateProfileString("TaskName" + Str$(sectionNumber + 1), "TaskDeadLine", tData->GetTaskDeadLine(), INI_FILE_NAME)
+
+	' ★★★ TODO: 複数行ある備考は1行に直す必要がある。(while, realloc, InStr を組み合わせれば可能?)
+	' 下記、元ソース
+	'WritePrivateProfileString("TaskName" + Str$(sectionNumber + 1), "TaskRemarks", tData->GetTaskRemarks(), INI_FILE_NAME)
+	' 改行文字を含めた文字列で .ini ファイルを作成することができないので、Base64 にして1行の文字列を作成する。
+	Dim encryptStr = NULL As BytePtr
+	EncryptString(tData->GetTaskRemarks(), encryptStr)
+	WritePrivateProfileString("TaskName" + Str$(sectionNumber + 1), "TaskRemarks", encryptStr, INI_FILE_NAME)
+	free(encryptStr)
+
+	res = TRUE
+	SaveTaskData = res
+End Function

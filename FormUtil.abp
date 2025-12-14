@@ -1,0 +1,72 @@
+/**
+	フォームユーティリティ
+*/
+
+' DateTimePicker のクラス名
+Const DATETIMEPICK_CLASS = "SysDateTimePick32"
+' DateTimePicker にて日付の未入力が行える様にする定数 (日付左にチェックボックスが付与される)
+Const DTS_SHOWNONE = &H0002
+' DateTimePicker から現在選択されている日付を取得する定数
+Const DTM_GETSYSTEMTIME = &H1000 + 1
+' DateTimePicker へ日付を設定する際の定数
+Const DTM_SETSYSTEMTIME = &H1000 + 2
+' 日付情報が取得可能な場合
+Const GDT_VALID = 0 
+' 日付情報が取得出来ない場合 (チェックボックス OFF による無効時)
+Const GDT_NONE = 1
+' 日付の書式
+Const DATE_FORMAT_YMD = "yyyy/MM/dd"
+' 日付書式(wsprintf で使用)
+Const DATE_FORMAT = "%04d/%02d/%02d"
+' 日付書式 (日付がない場合)
+Const DATE_NONE_FORMAT = "-"
+
+/**
+	指定したウィンドウをスクリーン中央に表示します。
+	mainWndow: 中心に表示させるウィンドウのハンドル
+*/
+Sub SetWindowShowCenterScreen(mainWindow As HWND)
+	Dim mainWindowRect As RECT
+	Dim screenSizeX = 0 As Long
+	Dim screenSizeY = 0 As Long
+
+	' プライマリースクリーンのサイズを取得
+	screenSizeX = GetSystemMetrics(SM_CXSCREEN)
+	screenSizeY = GetSystemMetrics(SM_CYSCREEN)
+
+	' 指定したウィンドウの座標を取得
+	GetWindowRect(mainWindow, mainWindowRect)
+
+	' 新しい座標を計算
+	Dim newWindowX = 0 As Double
+	Dim newWindowY = 0 As Double
+
+	newWindowX = (screenSizeX - (mainWindowRect.right - mainWindowRect.left)) / 2
+	newWindowY = (screenSizeY - (mainWindowRect.bottom - mainWindowRect.top)) / 2
+
+	' 位置を変更
+	SetWindowPos(mainWindow, NULL, newWindowX As Long, newWindowY As Long, 0, 0, SWP_NOSIZE)
+End Sub
+
+/**
+	指定したダイアログウィンドウを中央に表示します。
+	ownerWindow	: 親ウィンドウのハンドル
+	dialogWindow: 表示するダイアログのハンドル 
+*/
+Sub SetDialogCenter(ownerWindow As HWND, dialogWindow As HWND)
+	Dim ownerWindowRect As RECT
+	Dim dialogWindowRect As RECT
+	Dim x = 0 As Double, y = 0 As Double
+
+	' メインウィンドウの座標を取得
+	GetWindowRect(ownerWindow, ownerWindowRect)
+	' ダイアログウィンドウの座標を取得
+	GetWindowRect(dialogWindow	, dialogWindowRect)
+
+	' 新しい座標を計算
+	x = ((ownerWindowRect.right - ownerWindowRect.left) - (dialogWindowRect.right - dialogWindowRect.left)) / 2 + ownerWindowRect.left
+	y = ((ownerWindowRect.bottom - ownerWindowRect.top) - (dialogWindowRect.bottom - dialogWindowRect.top)) / 2 + ownerWindowRect.top
+
+	' 位置を変更
+	SetWindowPos(dialogWindow, NULL, x As Long, y As Long, 0, 0, SWP_NOSIZE)
+End Sub

@@ -1,0 +1,238 @@
+'-----------------------------------------------------------------------------
+'  イベント プロシージャ
+'-----------------------------------------------------------------------------
+' このファイルには、ウィンドウ [MainWnd] に関するイベントをコーディングします。
+' ウィンドウ ハンドル: hMainWnd
+
+' TODO: この位置にグローバルな変数、構造体、定数、関数を定義します。
+
+
+'-----------------------------------------------------------------------------
+' ウィンドウメッセージを処理するためのコールバック関数
+
+#ifdef _WIN64
+Function MainWndProc(hWnd As HWND, dwMsg As DWord, wParam As WPARAM, lParam As LPARAM) As QWord
+#else
+Function MainWndProc(hWnd As HWND, dwMsg As DWord, wParam As WPARAM, lParam As LPARAM) As DWord
+#endif
+	' TODO: この位置にウィンドウメッセージを処理するためのコードを記述します。
+
+	' イベントプロシージャの呼び出しを行います。
+	MainWndProc=EventCall_MainWnd(hWnd,dwMsg,wParam,lParam)
+End Function
+
+
+'-----------------------------------------------------------------------------
+' ここから下は、イベントプロシージャを記述するための領域になります。
+
+/**
+	ウィンドウ破棄時のイベント
+*/
+Sub MainWnd_Destroy()
+	' ListView 上のタスクデータを保存する。
+	Dim lvRowCount = 0 As Long
+	lvRowCount = ListView_GetItemCount(GetDlgItem(hMainWnd, LvTask))
+
+	If (lvRowCount <> 0) Then
+
+		' 保存するレコードの全件数を先に保存させる。
+		SaveTotalTaskDataCount(lvRowCount)
+
+		Dim index = 0 As Long
+		For index = 0 To lvRowCount - 1 Step 1
+			' 保存オブジェクトを取得
+			Dim saveTaskData As *TaskManagerData
+			saveTaskData = GetSelectedRowTaskData(GetDlgItem(hMainWnd, LvTask), index)
+
+			' レコードの保存
+			SaveTaskData(index, saveTaskData)
+
+			Delete saveTaskData
+		Next index
+	Else
+		' ★★★ 不具合修正対応
+		' レコード件数が 0 件の場合、タスクリストの .ini ファイルを削除する。
+		DeleteTaskListIniFile()
+		' ★★★ 不具合修正対応 END
+	End If
+
+	TaskManagerAB_DestroyObjects()
+	PostQuitMessage(0)
+End Sub
+
+/**
+	ウィンドウ作成時のイベント
+	CreateStruct: 作成されるウィンドウに関する情報
+*/
+Sub MainWnd_Create(ByRef CreateStruct As CREATESTRUCT)
+
+	' 起動時のフォームをプライマリスクリーンの中心に表示する。
+	SetWindowShowCenterScreen(hMainWnd)
+
+	' ListView の設定
+	SetListViewColumn(GetDlgItem(hMainWnd, LvTask))
+
+	' 保存した .ini ファイルからデータの取得
+	Dim totalTaskDataCount = 0 As Long
+	totalTaskDataCount = GetTotalTaskDataCount()
+
+	If (totalTaskDataCount <> 0) Then
+		Dim index = 0 As Long
+		For index = 0 To totalTaskDataCount - 1 Step 1
+			Dim taskData As *TaskManagerData
+			taskData = GetTaskDataFromINIFile(index + 1)
+			' .ini ファイルから取得したデータを ListView へ設定する。
+			SetInsertTaskDataListView(GetDlgItem(hMainWnd, LvTask), index, taskData)
+			Delete taskData
+		Next index
+	End If
+End Sub
+
+/**
+	「終了」メニュークリックイベント
+*/
+Sub MainWnd_IDM_Exit_MenuClick()
+	DestroyWindow(hMainWnd)
+End Sub
+
+/**
+	「バージョン情報」メニュークリックイベント
+*/
+Sub MainWnd_IDM_VersionInfo_MenuClick()
+	Dim length = 0 As Long
+	Dim message = NULL As BytePtr
+	length = lstrlen(VERSION_INFO + VERSION_NUMBER)
+	message = calloc(length + 1)
+	wsprintf(message, VERSION_INFO, VERSION_NUMBER)
+	MessageBox(hMainWnd, message, VERSION_INFO_DIALOG_TITLE, MB_OK or MB_ICONINFORMATION)
+	free(message)
+End Sub
+
+/**
+	『タスク追加』ボタンクリックイベント
+*/
+Sub MainWnd_BtnAddTask_Click()
+	SetTaskData(NULL)
+	Dim dialogResult = 0 As QWord
+	dialogResult = DialogBox(hMainWnd, "TaskEdit")
+
+	If (dialogResult = TRUE) Then
+		Dim data As *TaskManagerData
+		Dim isCreateNewTask = FALSE As BOOL
+		data = GetTaskData()
+		isCreateNewTask = GetIsCreateNewTask()
+
+		If (data <> NULL and isCreateNewTask) Then
+			' タスクデータが存在し、新規作成タスクの場合
+			Dim listViewInsertRowIndex = 0 As Long
+			listViewInsertRowIndex = ListView_GetItemCount(GetDlgItem(hMainWnd, LvTask))
+			SetInsertTaskDataListView(GetDlgItem(hMainWnd, LvTask), listViewInsertRowIndex, data)
+			Delete data
+			' ★★★ 2025年10月27日 機能改善対応
+			' レコードを保存する。
+			' ListView 上のタスクデータを保存する。
+			Dim lvRowCount = 0 As Long
+			lvRowCount = ListView_GetItemCount(GetDlgItem(hMainWnd, LvTask))
+			' 保存するレコードの全件数を先に保存させる。
+			SaveTotalTaskDataCount(lvRowCount)
+
+			Dim index = 0 As Long
+			For index = 0 To lvRowCount - 1 Step 1
+				' 保存オブジェクトを取得
+				Dim saveTaskData As *TaskManagerData
+				saveTaskData = GetSelectedRowTaskData(GetDlgItem(hMainWnd, LvTask), index)
+
+				' レコードの保存
+				SaveTaskData(index, saveTaskData)
+
+				Delete saveTaskData
+			Next index
+			' ★★★ 機能改善対応 END
+		End If
+	End If
+End Sub
+
+
+/**
+	『タスク削除』ボタンクリックイベント
+*/
+Sub MainWnd_BtnDeleteTask_Click()
+	' 選択行のタスクデータを取得
+	Dim selectedRowIndex = 0 As Long
+	Dim listView = NULL As HWND
+
+	listView = GetDlgItem(hMainWnd, LvTask)
+	selectedRowIndex = GetListViewSelectedRowIndex(listView)
+
+	If (selectedRowIndex = -1) Then
+		' 選択している行が無い為、以後の処理を行わない。
+		Exit Sub
+	End If
+
+	Dim taskData As *TaskManagerData
+	taskData = GetSelectedRowTaskData(listView, selectedRowIndex)
+
+	' 削除前確認ダイアログを表示
+	Dim message = NULL As BytePtr
+	Dim length = 0 As Long
+	length = lstrlen(StrPtr(COMFIRM_DELETE_TASK) + _
+					 StrPtr(Str$(taskData->GetIsTaskComplete())) + _
+					 taskData->GetTaskName() +  _
+					 StrPtr(Str$(taskData->GetTaskProgress())) + _
+					 taskData->GetTaskDeadLine())
+
+	' メッセージ文言作成
+	message = calloc(length + 1)
+	wsprintf(message, StrPtr(COMFIRM_DELETE_TASK), StrPtr(Str$(taskData->GetIsTaskComplete())), taskData->GetTaskName(), StrPtr(Str$(taskData->GetTaskProgress())), taskData->GetTaskDeadLine())
+
+	If (MessageBox(hMainWnd, message, DIALOG_TITLE, MB_OKCANCEL or MB_ICONEXCLAMATION) <> IDOK) Then
+		free(message)
+		Delete taskData
+
+		' OK ボタン以外がクリックしたので以後の処理を行わない。
+		Exit Sub
+	End If
+
+	free(message)
+	Delete taskData
+
+	' ListView コントロールから選択行を削除する。
+	ListView_DeleteItem(listView, selectedRowIndex)
+
+	' 先頭行を選択する。
+	ListView_SetItemState(listView, 0, LVIS_SELECTED or LVIS_FOCUSED, LVIS_SELECTED or LVIS_FOCUSED)
+End Sub
+
+/**
+	ListView 上でのマウスダブルクリックイベント
+	nmListView: ダブルクリックした ListView コントロールの情報
+*/
+Sub MainWnd_LvTask_DblClick(ByRef nmListView As NMLISTVIEW)
+
+	If (nmListView.iItem = -1) Then
+		' ListView 上のレコードが無い余白部分等をダブルクリックした為、
+		' 以後の処理を行わない。
+		Exit Sub
+	End If
+
+	' ダブルクリックした ListView 上の項目からタスクデータを作成
+	Dim taskData As *TaskManagerData
+	taskData = GetSelectedRowTaskData(nmListView.hdr.hwndFrom, nmListView.iItem)
+	SetTaskData(taskData)
+	Dim dialogResult = 0 As QWord
+	dialogResult = DialogBox(hMainWnd, "TaskEdit")
+
+	If (dialogResult = TRUE) Then
+		taskData = GetTaskData()
+
+		If (taskData <> NULL) Then
+			' 選択行のタスク内容を入れ替える。
+			ListView_DeleteItem(nmListView.hdr.hwndFrom, nmListView.iItem)
+			SetInsertTaskDataListView(nmListView.hdr.hwndFrom, nmListView.iItem, taskData)
+		End If
+	End If
+
+	If (taskData <> NULL) Then
+		Delete taskData
+	End If
+End Sub

@@ -1,0 +1,97 @@
+/**
+	タスク管理データ
+*/
+
+Class TaskManagerData
+Private
+	isTaskComplete As BOOL
+	taskName As BytePtr
+	taskProgress As Long
+	taskDeadLine As BytePtr
+	taskRemarks As BytePtr
+Public
+	/**
+		コンストラクタ
+		isTComp: タスク完了状態
+		tName: タスク名
+		tProgress: タスク進捗率
+		tDeadLine: タスク期日
+		tRemarks: タスク備考
+	*/
+	Sub TaskManagerData(isTComp As BOOL, tName As BytePtr, tProgress As Long, tDeadLine As *SYSTEMTIME, tRemarks As BytePtr)
+		isTaskComplete = isTComp
+		taskProgress = tProgress
+
+		Dim length = 0 As Long
+		length = lstrlen(tName)
+		taskName = calloc(length + 1)
+		lstrcpy(taskName, tName)
+
+		' 期日
+		If (tDeadLine->wYear = 0 and tDeadLine->wMonth = 0 and tDeadLine->wDay = 0) Then
+			' 日付がない場合
+			length = lstrlen(DATE_NONE_FORMAT)
+			taskDeadLine = calloc(length + 1)
+			wsprintf(taskDeadLine, DATE_NONE_FORMAT, NULL)
+		Else
+			' 日付がある場合
+			length = lstrlen(DATE_FORMAT_YMD)
+			taskDeadLine = calloc(length + 1)
+			wsprintf(taskDeadLine, DATE_FORMAT, tDeadLine->wYear, tDeadLine->wMonth, tDeadLine->wDay)
+		End If
+
+		length = lstrlen(tRemarks)
+		taskRemarks = calloc(length + 1)
+		lstrcpy(taskRemarks, tRemarks)
+	End Sub
+
+	/**
+		デストラクタ
+	*/
+	Sub ~TaskManagerData()
+		' 確保したメモリを開放する。
+		free(taskName)
+		free(taskDeadLine)
+		free(taskRemarks)
+	End Sub
+
+	/**
+		タスク完了状態を取得します。
+		Return: タスク完了状態を表すフラグ
+	*/
+	Function GetIsTaskComplete() As BOOL
+		GetIsTaskComplete = isTaskComplete
+	End Function
+
+	/**
+		タスク名を取得します。
+		Return: タスク名
+	*/
+	Function GetTaskName() As BytePtr
+		GetTaskName = taskName
+	End Function
+
+	/**
+		タスク進捗率を取得します。
+		Return: タスク進捗率
+	*/
+	Function GetTaskProgress() As Long
+		GetTaskProgress = taskProgress
+	End Function
+
+	/**
+		タスク期日を取得します。
+		Return: タスク期日文字列 (yyyy/MM/dd 形式)
+	*/
+	Function GetTaskDeadLine() As BytePtr
+		GetTaskDeadLine = taskDeadLine
+	End Function
+
+	/**
+		タスク備考を取得します。
+		Return: タスク備考
+	*/
+	Function GetTaskRemarks() As BytePtr
+		GetTaskRemarks = taskRemarks
+	End Function
+End Class

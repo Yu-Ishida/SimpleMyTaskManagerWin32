@@ -1,0 +1,262 @@
+'-----------------------------------------------------------------------------
+'  イベント プロシージャ
+'-----------------------------------------------------------------------------
+' このファイルには、ウィンドウ [TaskEdit] に関するイベントをコーディングします。
+' ウィンドウ ハンドル: hTaskEdit
+
+' TODO: この位置にグローバルな変数、構造体、定数、関数を定義します。
+' タスクデータ
+Dim _taskData As *TaskManagerData
+/**
+	タスクデータを設定します。
+	taskData: タスクデータ
+*/
+Sub SetTaskData(taskData As *TaskManagerData)
+	_taskData = taskData
+End Sub
+/**
+	タスクデータを取得します。
+	Return: タスクデータ
+*/
+Function GetTaskData() As *TaskManagerData
+	GetTaskData = _taskData
+End Function
+
+' 新規タスクデータを作成したかを示すフラグ
+Dim _isCreateNewTask = FALSE As BOOL
+/**
+	新規タスクデータを作成したかを取得します。
+	Return: 新規タスクデータ作成時: TRUE, そうでない場合: FALSE
+*/
+Function GetIsCreateNewTask() As BOOL
+	GetIsCreateNewTask = _isCreateNewTask
+End Function
+
+' 期日 DateTimePicker コントロールのウィンドウハンドル
+Dim _dpDeadLine = NULL As HWND
+
+'-----------------------------------------------------------------------------
+' ウィンドウメッセージを処理するためのコールバック関数
+
+#ifdef _WIN64
+Function TaskEditProc(hWnd As HWND, dwMsg As DWord, wParam As WPARAM, lParam As LPARAM) As QWord
+#else
+Function TaskEditProc(hWnd As HWND, dwMsg As DWord, wParam As WPARAM, lParam As LPARAM) As DWord
+#endif
+	' TODO: この位置にウィンドウメッセージを処理するためのコードを記述します。
+
+	' イベントプロシージャの呼び出しを行います。
+	TaskEditProc=EventCall_TaskEdit(hWnd,dwMsg,wParam,lParam)
+End Function
+
+
+'-----------------------------------------------------------------------------
+' ここから下は、イベントプロシージャを記述するための領域になります。
+
+/**
+	ウィンドウ作成時のイベント
+	CreateStruct: 作成されるウィンドウに関する情報
+*/
+Sub TaskEdit_Create(ByRef CreateStruct As CREATESTRUCT)
+
+	' 表示位置の調整
+	SetDialogCenter(hMainWnd, hTaskEdit)
+
+	' DateTimePicker コントロールの配置
+	_dpDeadLine = CreateWindowEx(WS_TABSTOP, DATETIMEPICK_CLASS, NULL, WS_BORDER or WS_CHILD or WS_VISIBLE or DTS_SHOWNONE, 70, 90, 310, 21, hTaskEdit, NULL, GetModuleHandle(NULL), NULL)
+
+	' 進捗率の文字数制限
+	SendMessage(GetDlgItem(hTaskEdit, TbProgress), EM_SETLIMITTEXT, 3, NULL) ' 3文字にする
+
+	If (_taskData <> NULL) Then
+		' 既存レコードの編集として判断し、TaskData オブジェクトの内容を該当するコントロールに設定する。
+
+		Dim cbIsTaskComplete = NULL As HWND
+		Dim tbTaskName = NULL As HWND
+		Dim tbProgress = NULL As HWND
+		Dim tbRemarks = NULL As HWND
+
+		cbIsTaskComplete = GetDlgItem(hTaskEdit, CbIsTaskComplete)
+		tbTaskName = GetDlgItem(hTaskEdit, TbTaskName)
+		tbProgress = GetDlgItem(hTaskEdit, TbProgress)
+		tbRemarks = GetDlgItem(hTaskEdit, TbRemarks)
+
+		' CheckBox
+		If (_taskData->GetIsTaskComplete()) Then
+			SendMessage(cbIsTaskComplete, BM_SETCHECK, BST_CHECKED, 0)
+		Else
+			SendMessage(cbIsTaskComplete, BM_SETCHECK, BST_UNCHECKED, 0)
+		End If
+
+		SetWindowText(tbTaskName, _taskData->GetTaskName())
+		SetWindowText(tbProgress, Str$(_taskData->GetTaskProgress()))
+		' 期日
+		Dim deadLineDateStruct = [0, 0, 0, 0, 0, 0, 0, 0] As SYSTEMTIME
+		If (lstrcmp(_taskData->GetTaskDeadLine(), StrPtr(DATE_NONE_FORMAT)) = 0) Then
+			' 日付が "-" の場合
+			GetLocalTime(deadLineDateStruct)
+			SendMessage(_dpDeadLine, DTM_SETSYSTEMTIME, GDT_NONE, VarPtr(deadLineDateStruct) As LPARAM) ' 日付有効のチェックを外す
+		Else
+			' 日付がある場合
+			GetDateStrToSystemTimeStruct(_taskData->GetTaskDeadLine(), VarPtr(deadLineDateStruct))
+			SendMessage(_dpDeadLine, DTM_SETSYSTEMTIME, GDT_VALID, VarPtr(deadLineDateStruct) As LPARAM)
+		End If	
+
+		SetWindowText(tbRemarks, _taskData->GetTaskRemarks())
+
+		_isCreateNewTask = FALSE
+	Else
+		_isCreateNewTask = TRUE
+	End If
+End Sub
+
+/**
+	「OK」ボタンクリックイベント
+*/
+Sub TaskEdit_BtnOK_Click()
+	' 入力値検証を行う。
+	Dim validMessage = NULL As BytePtr
+	If (isInputDataValidate(validMessage)) Then
+		MessageBox(hTaskEdit, validMessage, DIALOG_TITLE, MB_OK or MB_ICONEXCLAMATION)
+		free(validMessage)
+		Exit Sub
+	Else
+		' 正常時
+
+		' 入力内容を元に TaskData オブジェクトを作成して本ダイアログを閉じる。
+		Dim cbIsTaskComplete = NULL As HWND
+		Dim tbTaskName = NULL As HWND
+		Dim tbProgress = NULL As HWND
+		Dim tbRemarks = NULL As HWND
+
+		cbIsTaskComplete = GetDlgItem(hTaskEdit, CbIsTaskComplete)
+		tbTaskName = GetDlgItem(hTaskEdit, TbTaskName)
+		tbProgress = GetDlgItem(hTaskEdit, TbProgress)
+		tbRemarks = GetDlgItem(hTaskEdit, TbRemarks)
+
+		Dim isTaskComplete = FALSE As BOOL
+		Dim taskName = NULL As BytePtr
+		Dim taskProgress = 0 As Long
+		Dim taskRemarks = NULL As BytePtr
+
+		' 入力内容の取得
+		If (SendMessage(cbIsTaskComplete, BM_GETCHECK, 0, 0) = BST_CHECKED) Then
+			' チェックがついている
+			isTaskComplete = TRUE
+		Else
+			' チェックなし
+			isTaskComplete = FALSE
+		End If
+
+		Dim length = 0 As Long
+		' タスク名
+		length = GetWindowTextLength(tbTaskName)
+		taskName = calloc(length + 1)
+		GetWindowText(tbTaskName, taskName, length + 1)
+
+		' 進捗率
+		length = GetWindowTextLength(tbProgress)
+		Dim temp = NULL As BytePtr
+		temp = calloc(length + 1)
+		GetWindowText(tbProgress, temp, length + 1)
+		taskProgress = Val(temp) As Long
+
+		' 期日
+		Dim st = [0, 0, 0, 0, 0, 0, 0, 0] As SYSTEMTIME ' メンバ変数をすべて 0 クリア, NULL ではダメ
+		Dim result = NULL As LRESULT
+		result = SendMessage(_dpDeadLine, DTM_GETSYSTEMTIME, 0, VarPtr(st) As LPARAM)
+		If (result = GDT_VALID) Then
+			' for debug
+			ConsoleOutputLine("日付の取得成功")
+		ElseIf (result = GDT_NONE) Then
+			' for debug
+			ConsoleOutputLine("日付は未設定")
+		End If
+
+		' 備考
+		length = GetWindowTextLength(tbRemarks)
+		taskRemarks = calloc(length + 1)
+		GetWindowText(tbRemarks, taskRemarks, length + 1)
+
+		' オブジェクトを作成
+		_taskData = New TaskManagerData(isTaskComplete, taskName, taskProgress, VarPtr(st), taskRemarks)
+
+		free(taskName)
+		free(temp)
+		free(taskRemarks)
+
+		' ダイアログ終了時の呼び出し元への返却
+		EndDialog(hTaskEdit, TRUE)
+	End If
+End Sub
+
+' ★★★ 2025年10月27日 機能改善対応 追加処理
+/**
+	タスク完了チェックボックスクリック時のイベント
+*/
+Sub TaskEdit_CbIsTaskComplete_Click()
+	Dim cbIsTaskComplete = NULL As HWND
+	Dim isTaskComplete = FALSE As BOOL
+
+	cbIsTaskComplete = GetDlgItem(hTaskEdit, CbIsTaskComplete)
+	If (SendMessage(cbIsTaskComplete, BM_GETCHECK, 0, 0) = BST_CHECKED) Then
+		' チェックがついている
+		isTaskComplete = TRUE
+	Else
+		' チェックなし
+		isTaskComplete = FALSE
+	End If
+
+	If (isTaskComplete) Then
+		' 進捗率を 100% にする。
+		Dim tbProgress = NULL As HWND
+		tbProgress = GetDlgItem(hTaskEdit, TbProgress)
+		SetWindowText(tbProgress, Str$(100))
+	End If
+End Sub
+' ★★★ 追加処理 END
+
+/**
+	入力値検証を行います。
+	message: 異常時におけるメッセージを格納する変数
+	Return: 検証の結果異常の場合: TRUE, 正常の場合: FALSE
+*/
+Function isInputDataValidate(ByRef message As BytePtr) As BOOL
+	Dim res = FALSE As BOOL
+
+	Dim messageLength = 0 As Long
+	Dim length = 0 As Long
+	length = GetWindowTextLength(GetDlgItem(hTaskEdit, TbTaskName))
+
+	If (length = 0) Then
+		messageLength = lstrlen(StrPtr(INVALID_TASK_NAME_NOT_INPUTED))
+		message = calloc(messageLength + 1)
+		lstrcpy(message, StrPtr(INVALID_TASK_NAME_NOT_INPUTED))
+		res = TRUE
+		isInputDataValidate = res
+		Exit Function
+	End If
+
+	length = GetWindowTextLength(GetDlgItem(hTaskEdit, TbProgress))
+	If (length > 0) Then
+		Dim progressStr = NULL As BytePtr
+		progressStr = calloc(length + 1)
+		GetWindowText(GetDlgItem(hTaskEdit, TbProgress), progressStr, length + 1)
+		Dim progress = 0 As Long
+		progress = Val(progressStr) As Long
+
+		If (progress > 100 or progress < 0) Then
+			messageLength = lstrlen(StrPtr(IVNALID_TASK_PROGRESS_INPUT))
+			message = calloc(messageLength + 1)
+			lstrcpy(message, StrPtr(IVNALID_TASK_PROGRESS_INPUT))
+			free(progressStr)
+			res = TRUE
+			isInputDataValidate = res
+			Exit Function
+		End If
+		free(progressStr)
+	End If
+
+	isInputDataValidate = res
+End Function
+

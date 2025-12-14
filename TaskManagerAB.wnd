@@ -1,0 +1,53 @@
+WINDOW:MainWnd
+    HANDLE    = hMainWnd
+    POINT     = -2147483648,-2147483648
+    SIZE      = 600,500
+    CAPTION   = "タスク管理"
+    STYLE     = &H10ca0000
+    EXSTYLE   = &H00000000
+    MENUID    = MainMenu
+    ID        = 0
+    BGCOLOR   = 15
+    FONT      = -12,0,0,0,400,0,0,0,128,3,2,1,32,"ＭＳ Ｐゴシック"
+    ICONID    = IDI_APPICON
+    CLASS     = "NORMAL"
+    CALLBACK  = MainWndProc
+    TYPE      = 0
+    FILEPATH  = MainWnd.sbp
+    ITEM      = LbNotice,10,20,570,12,"タスク内容を編集するには一覧の該当するレコードをダブルクリックして下さい。",&H50000000,&H00000000,11
+    ITEM      = BtnAddTask,10,40,80,50,"タスク追加",&H50000000,&H00000000,1
+    ITEM      = BtnDeleteTask,100,40,80,50,"タスク削除",&H50000000,&H00000000,1
+    ITEM      = LvTask,10,100,570,340,"",&H5000000d,&H00000200,9
+END
+WINDOW:TaskEdit
+    HANDLE    = hTaskEdit
+    POINT     = -2147483648,-2147483648
+    SIZE      = 400,300
+    CAPTION   = "タスクの作成/編集"
+    STYLE     = &H00c80000
+    EXSTYLE   = &H00000000
+    ID        = 0
+    BGCOLOR   = 15
+    FONT      = -12,0,0,0,400,0,0,0,128,3,2,1,32,"ＭＳ Ｐゴシック"
+    ICONID    = IDI_APPICON
+    CLASS     = "NORMAL"
+    CALLBACK  = TaskEditProc
+    TYPE      = 1
+    FILEPATH  = TaskEdit.sbp
+    ITEM      = CbIsTaskComplete,10,10,246,15,"タスクが完了している場合はチェックを付ける",&H50000003,&H00000000,2
+    ITEM      = LbTaskName,10,35,50,12,"タスク名",&H50000001,&H00000000,11
+    ITEM      = TbTaskName,70,30,310,21,"",&H50010000,&H00000200,4
+    ITEM      = TbProgress,70,60,310,21,"",&H50012002,&H00000200,4
+    ITEM      = LbProgress,10,65,50,12,"進捗率",&H50000001,&H00000000,11
+    ITEM      = LbDeadLine,10,95,50,12,"期日",&H50000001,&H00000000,11
+    ITEM      = TbRemarks,10,120,370,140,"",&H503110c4,&H00000200,4
+    ITEM      = BtnOK,290,5,90,21,"OK",&H50000000,&H00000000,1
+END
+MENU:MainMenu
+    POPUP     = "ファイル (&F)",0
+        ITEM      = IDM_Exit,"終了 (&X)",0
+    END
+    POPUP     = "ヘルプ (&H)",0
+        ITEM      = IDM_VersionInfo,"バージョン情報 (&A)",0
+    END
+END

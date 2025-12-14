@@ -1,0 +1,163 @@
+/**
+	システムユーティリティ
+*/
+
+Declare Function PathFileExists Lib "Shlwapi" Alias "PathFileExistsA" (pszPath As BytePtr) As BOOL
+
+Declare Function CryptBinaryToString Lib "Crypt32" Alias "CryptBinaryToStringA" (pbBinary As BytePtr, cbBinary As DWord, dwFlags As DWord, pszString As BytePtr, ByRef pcchString As DWord) As BOOL
+Declare Function CryptStringToBinary Lib "Crypt32" Alias "CryptStringToBinaryA" (pszString As BytePtr, cchString As DWord, dwFlags As DWord, pbBinary As BytePtr, ByRef pcbBinary As DWord, ByRef pdwSkip As DWord, ByRef pdwFlags As DWord) As BOOL
+
+' バージョン番号
+Const VERSION_NUMBER = "1.5"
+
+' テキスト系データにおける最大テキストデータ長
+Const MAX_TEXT_LENGTH = 1024
+
+/**
+	Base64 変換で使用
+*/
+' ヘッダーなしの Base64
+Const CRYPT_STRING_BASE64 = &H00000001
+' エンコードされた文字列に改行文字を追加しない
+Const CRYPT_STRING_NOCRLF = &H40000000
+
+/**
+	指定したテキストをコンソール上に出力します。
+	value: コンソール上に出力するテキスト
+*/
+Sub ConsoleOutputLine(value As BytePtr)
+	OutputDebugString(value + Ex"\r\n")
+End Sub
+
+/**
+	GetLastError() で取得可能なエラーメッセージをダイアログとして表示します。
+	hWnd: ダイアログを表示するウィンドウハンドル
+*/
+Sub ShowErrorDialog(hWnd As HWND)
+	Dim message = NULL As BytePtr
+	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER or FORMAT_MESSAGE_FROM_SYSTEM or FORMAT_MESSAGE_IGNORE_INSERTS, NULL, GetLastError(), LANG_USER_DEFAULT, VarPtr(message), 0, NULL)
+	MessageBox(hWnd, message, DIALOG_TITLE, MB_OK or MB_ICONERROR)
+	LocalFree(message)
+End Sub
+
+/**
+	指定した日付文字列を SYSTEMTIME 構造体のオブジェクトに変換します。
+	dateStr: 変換する日付文字列 (yyyy/MM/dd の形式)
+	sysTimeStruct: 変換した日付データを保持する SYSTEMTIME 構造体のポインタ
+	Return: 正常に変換出来た場合: TRUE, 失敗した場合: FALSE
+*/
+Function GetDateStrToSystemTimeStruct(dateStr As BytePtr, sysTimeStruct As *SYSTEMTIME) As BOOL
+	Dim res = FALSE As BOOL
+
+	Dim yearStr = NULL As BytePtr
+	Dim monthStr = NULL As BytePtr
+	Dim dayStr = NULL As BytePtr
+
+	Dim length = 0 As Long
+
+	If (lstrlen(dateStr) <> lstrlen(DATE_FORMAT_YMD)) Then
+		' sysTimeStruct 構造体を 0 で初期化する。
+		sysTimeStruct->wYear = 0
+		sysTimeStruct->wMonth = 0
+		sysTimeStruct->wDayOfWeek = 0
+		sysTimeStruct->wDay = 0
+		sysTimeStruct->wHour = 0
+		sysTimeStruct->wMinute = 0
+		sysTimeStruct->wSecond = 0
+		sysTimeStruct->wMilliseconds = 0
+
+		' 日付の文字数が一致しない為、以後の処理を行わない。
+		GetDateStrToSystemTimeStruct = res
+		Exit Function
+	End If
+
+	yearStr = calloc(5)
+	monthStr = calloc(3)
+	dayStr = calloc(3)
+	
+	lstrcpy(yearStr, StrPtr(Left$(dateStr, 4)))
+	lstrcpy(monthStr, StrPtr(Mid$(dateStr, 6, 2)))
+	lstrcpy(dayStr, StrPtr(Right$(dateStr, 2)))
+
+	' for debug
+	ConsoleOutputLine("年: " + yearStr)
+	ConsoleOutputLine("月: " + monthStr)
+	ConsoleOutputLine("日: " + dayStr)
+
+	' 分割した年月日を SYSTEMTIME の該当するメンバに適用する。
+	sysTimeStruct->wYear = Val(yearStr) As Word
+	sysTimeStruct->wMonth = Val(monthStr) As Word
+	sysTimeStruct->wDay = Val(dayStr) As Word
+
+	free(yearStr)
+	free(monthStr)
+	free(dayStr)
+
+	GetDateStrToSystemTimeStruct = res
+End Function
+
+/**
+	指定したファイルが存在するかを確認します。
+	fileNamePath: 確認するファイルのファイル名を含むパス
+	Return: 指定したファイルが存在する場合: TRUE, そうでない場合: FALSE
+*/
+Function GetExistFile(fileNamePath As BytePtr) As BOOL
+	Dim res = FALSE As BOOL
+
+	res = PathFileExists(fileNamePath)
+
+	GetExistFile = res
+End Function
+
+' ★★★ for 検証処理
+/**
+	参考資料
+	Microsoft Copilot: Win32API による Base64 エンコード
+	https://copilot.microsoft.com/chats/ezvaR4rWwuBBCvqzEfUCH
+*/
+/**
+	指定した文字列を Base64 に変換します。
+	srcStr: 変換する文字列
+	outputStr: Base64 に変換された文字列
+	Return: 変換に成功した場合: TRUE, 失敗した場合: FALSE
+*/
+Function EncryptString(srcStr As BytePtr, ByRef outputStr As BytePtr) As BOOL
+	Dim res = FALSE As BOOL
+
+	Dim encodedLength = 0 As DWord
+	Dim srcStrLength = 0 As Long
+	srcStrLength = lstrlen(srcStr)
+
+	' Base64 変換後の長さを取得
+	res = CryptBinaryToString(srcStr, srcStrLength, CRYPT_STRING_BASE64 or CRYPT_STRING_NOCRLF, NULL, encodedLength)
+
+	' Base64 へ変換
+	outputStr = calloc(encodedLength + 1)
+	res = CryptBinaryToString(srcStr, srcStrLength, CRYPT_STRING_BASE64 or CRYPT_STRING_NOCRLF, outputStr, encodedLength)
+
+	EncryptString = res
+End Function
+
+/**
+	指定した Base64 文字列を平文に変換します。
+	srcStr: 変換する Base64 文字列
+	outputStr: 平文に変換された文字列
+	Return: 変換に成功した場合: TRUE, 失敗した場合: FALSE
+*/
+Function DecryptString(srcStr As BytePtr, ByRef outputStr As BytePtr) As BOOL
+	Dim res = FALSE As BOOL
+
+	Dim decodedLength = 0 As DWord
+	Dim srcLength = 0 As Long
+	srcLength = lstrlen(srcStr)
+	
+	' 平文変換後の長さを取得
+	res = CryptStringToBinary(srcStr, srcLength, CRYPT_STRING_BASE64, NULL, decodedLength, ByVal NULL, ByVal NULL)
+
+	' 平文へ変換
+	outputStr = calloc(decodedLength + 1)
+	res = CryptStringToBinary(srcStr, srcLength, CRYPT_STRING_BASE64, outputStr, decodedLength, ByVal NULL, ByVal NULL)
+
+	DecryptString = res
+End Function
+' ★★★ for 検証処理 END

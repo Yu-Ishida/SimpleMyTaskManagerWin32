@@ -1,0 +1,21 @@
+/**
+	メッセージ定義
+*/
+
+' ダイアログ上に表示するタイトル
+Const DIALOG_TITLE = "タスク管理"
+
+' バージョン情報ダイアログ上に表示するタイトル
+Const VERSION_INFO_DIALOG_TITLE = "バージョン情報"
+
+' バージョン情報に表示するテキスト
+Const VERSION_INFO = Ex"シンプルタスク管理 Win32 版 Ver %s\r\n(c) 2025 Yu Ishida."
+
+' 検証: タスク名が入力されていない場合に表示するメッセージ
+Const INVALID_TASK_NAME_NOT_INPUTED = Ex"タスク名が入力されていません。\r\nタスクを追加するにはタスク名を入力する必要があります。"
+
+' 検証: タスク進捗率の入力に誤りがある場合に表示するメッセージ
+Const IVNALID_TASK_PROGRESS_INPUT = Ex"タスク進捗率の入力に誤りがあります。\r\n進捗率は 0% ～ 100% の範囲で入力して下さい。"
+
+' タスク削除前の確認ダイアログに表示するメッセージ
+Const COMFIRM_DELETE_TASK = Ex"下記のタスクを削除します。\r\n\r\nタスク完了状態: %s\r\nタスク名: %s\r\nタスク進捗率: %s\r\nタスク期限日: %s\r\n\r\n※ 削除したデータは元に戻せません!"

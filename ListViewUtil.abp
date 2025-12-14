@@ -1,0 +1,214 @@
+/**
+	リストビューユーティリティ
+*/
+
+/**
+	タスクリストビュー: 列幅定義
+*/
+' 完了状態列幅
+Const LIST_VIEW_COL0_WIDTH = 80
+' タスク名列幅
+Const LIST_VIEW_COL1_WIDTH = 120
+' タスク進捗率列幅
+Const LIST_VIEW_COL2_WIDTH = 80
+' タスク期限日列幅
+Const LIST_VIEW_COL3_WIDTH = 100
+
+/**
+	タスクリストビュー列ヘッダ名
+*/
+Const LIST_VIEW_COL0_NAME = "完了状態"
+Const LIST_VIEW_COL1_NAME = "タスク名"
+Const LIST_VIEW_COL2_NAME = "タスク進捗率"
+Const LIST_VIEW_COL3_NAME = "タスク期限日"
+Const LIST_VIEW_COL4_NAME = "備考"
+
+/**
+	指定したリストビューに対して列を設定します。
+	listView: 列を設定するリストビューコントロール
+*/
+Sub SetListViewColumn(listView As HWND)
+	Dim rectListView As RECT
+	Dim colData As LVCOLUMN
+
+	' ListView のコントロールを取得
+	GetClientRect(listView, rectListView)
+
+	' 完了状態
+	colData.mask = LVCF_FMT or LVCF_TEXT or LVCF_WIDTH or LVCF_SUBITEM
+	colData.fmt = LVCFMT_LEFT
+	colData.cx = LIST_VIEW_COL0_WIDTH
+	colData.iSubItem = 0
+	colData.pszText = StrPtr(LIST_VIEW_COL0_NAME)
+	ListView_InsertColumn(listView, 0, colData)
+
+	' タスク名
+	colData.cx = LIST_VIEW_COL1_WIDTH
+	colData.iSubItem = 1
+	colData.pszText = StrPtr(LIST_VIEW_COL1_NAME)
+	ListView_InsertColumn(listView, 1, colData)
+
+	' タスク進捗率
+	colData.cx = LIST_VIEW_COL2_WIDTH
+	colData.iSubItem = 2
+	colData.pszText = StrPtr(LIST_VIEW_COL2_NAME)
+	ListView_InsertColumn(listView, 2, colData)
+
+	' タスク期限日
+	colData.cx = LIST_VIEW_COL3_WIDTH
+	colData.iSubItem = 3
+	colData.pszText = StrPtr(LIST_VIEW_COL3_NAME)
+	ListView_InsertColumn(listView, 3, colData)
+
+	' 備考
+	colData.cx = rectListView.right - (LIST_VIEW_COL0_WIDTH + LIST_VIEW_COL1_WIDTH + LIST_VIEW_COL2_WIDTH + LIST_VIEW_COL3_WIDTH)
+	colData.iSubItem = 4
+	colData.pszText = StrPtr(LIST_VIEW_COL4_NAME)
+	ListView_InsertColumn(listView, 4, colData)
+
+	' ListView のスタイル設定
+	Dim listViewStyle = 0 As DWord
+	listViewStyle = ListView_GetExtendedListViewStyle(listView)
+	listViewStyle or = LVS_EX_FULLROWSELECT or LVS_EX_GRIDLINES
+	ListView_SetExtendedListViewStyle(listView, listViewStyle)
+End Sub
+
+/**
+	指定した ListView コントロールと行 Index にタスクデータを挿入します。
+	listView: タスクデータを設定する ListView コントロール
+	insertRowIndex: 挿入する行 Index
+	data: 設定するタスクデータ
+*/
+Sub SetInsertTaskDataListView(listView As HWND, insertRowIndex As Long, data As *TaskManagerData)
+	Dim item As LVITEM
+
+	' 完了状態列
+	item.mask = LVIF_TEXT
+	If (data->GetIsTaskComplete()) Then
+		item.pszText = "完了"
+	Else
+		item.pszText = "未完了"
+	End If
+	item.iItem = insertRowIndex
+	item.iSubItem = 0
+	ListView_InsertItem(listView, item)
+
+	' タスク名列
+	item.mask = LVIF_TEXT
+	item.pszText = data->GetTaskName()
+	item.iItem = insertRowIndex
+	item.iSubItem = 1
+	ListView_SetItem(listView, item)
+
+	' タスク進捗率列
+	item.mask = LVIF_TEXT
+	item.pszText = StrPtr(Str$(data->GetTaskProgress()))
+	item.iItem = insertRowIndex
+	item.iSubItem = 2
+	ListView_SetItem(listView, item)
+
+	' タスク期限日列
+	item.mask = LVIF_TEXT
+	item.pszText = data->GetTaskDeadLine()
+	item.iItem = insertRowIndex
+	item.iSubItem = 3
+	ListView_SetItem(listView, item)
+
+	' 備考列
+	item.mask = LVIF_TEXT
+	item.pszText = data->GetTaskRemarks()
+	item.iItem = insertRowIndex
+	item.iSubItem = 4
+	ListView_SetItem(listView, item)
+
+	' ListView コントロールにフォーカスを当てる。
+	SetFocus(listView)
+
+	' 挿入行を選択させる。
+	ListView_SetItemState(listView, insertRowIndex, LVIS_SELECTED or LVIS_FOCUSED, LVIS_SELECTED or LVIS_FOCUSED)
+End Sub
+
+/**
+	指定した ListView から選択している行の Index を取得します。
+	Return: 選択している行の Index
+	Remarks: 選択行がない場合 -1 が返却されます。
+*/
+Function GetListViewSelectedRowIndex(listView As HWND) As Long
+	Dim res = -1 As Long
+	Dim rowIndex = 0 As Long
+
+	' ListView の行数を取得する。
+	Dim rowCount = 0 As Long
+	rowCount = ListView_GetItemCount(listView)
+
+	For rowIndex = 0 To rowCount - 1 Step 1
+		' 選択している行 Index を取得する。
+		If (ListView_GetItemState(listView, rowIndex, LVIS_SELECTED) = LVIS_SELECTED) Then
+			res = rowIndex
+			Exit For
+		End If
+	Next rowIndex
+
+	GetListViewSelectedRowIndex = res
+End Function
+
+/**
+	指定した ListView で選択している行のタスクデータオブジェクトを取得します。
+	listView: 取得する ListView コントロールのハンドル
+	selectedRowIndex: 選択行の Index
+	Return: 選択した行のタスクデータオブジェクト
+*/
+Function GetSelectedRowTaskData(listView As HWND, selectedRowIndex As Long) As *TaskManagerData
+	Dim res As *TaskManagerData
+
+	If (selectedRowIndex = -1) Then
+		' 選択している行が無い為、以後の処理を行わない。
+		Exit Sub
+	End If
+
+	Dim isTaskCompleteStr = NULL As BytePtr ' ListView 上は文字列として表示している為
+	Dim taskName = NULL As BytePtr
+	Dim taskProgress = NULL As BytePtr
+	Dim taskDeadLine = NULL As BytePtr
+	Dim taskRemarks = NULL As BytePtr
+
+	isTaskCompleteStr = calloc(MAX_TEXT_LENGTH + 1)
+	taskName = calloc(MAX_TEXT_LENGTH + 1)
+	taskProgress = calloc(MAX_TEXT_LENGTH + 1)
+	taskDeadLine = calloc(MAX_TEXT_LENGTH + 1)
+	taskRemarks = calloc(MAX_TEXT_LENGTH + 1)
+
+	' 完了状態
+	ListView_GetItemText(listView, selectedRowIndex, 0, isTaskCompleteStr, MAX_TEXT_LENGTH)
+	' タスク名
+	ListView_GetItemText(listView, selectedRowIndex, 1, taskName, MAX_TEXT_LENGTH)
+	' タスク進捗率
+	ListView_GetItemText(listView, selectedRowIndex, 2, taskProgress, MAX_TEXT_LENGTH)
+	' タスク期日
+	ListView_GetItemText(listView, selectedRowIndex, 3, taskDeadLine, MAX_TEXT_LENGTH)
+	' タスク備考
+	ListView_GetItemText(listView, selectedRowIndex, 4, taskRemarks, MAX_TEXT_LENGTH)
+
+	' タスク期日の日付データに変換
+	Dim deadLine As SYSTEMTIME
+	GetDateStrToSystemTimeStruct(taskDeadLine, VarPtr(deadLine))
+
+	' タスク完了状態のテキストを BOOL に変換
+	Dim isTaskComplete = FALSE As BOOL
+	If (lstrcmp(isTaskCompleteStr, "完了") = 0) Then
+		isTaskComplete = TRUE
+	Else
+		isTaskComplete = FALSE
+	End If
+
+	' オブジェクトの作成
+	res = New TaskManagerData(isTaskComplete, taskName, Val(taskProgress) As Long, VarPtr(deadLine), taskRemarks)
+
+	free(isTaskCompleteStr)
+	free(taskName)
+	free(taskProgress)
+	free(taskDeadLine)
+	free(taskRemarks)
+
+	GetSelectedRowTaskData = res
+End Function
